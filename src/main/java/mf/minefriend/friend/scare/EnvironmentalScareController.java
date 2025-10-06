@@ -222,7 +222,7 @@ public class EnvironmentalScareController {
         private boolean playCaveSound(ServerPlayer player, RandomSource random) {
             ServerLevel level = player.serverLevel();
             BlockPos pos = player.blockPosition();
-            level.playSound(null, pos, SoundEvents.AMBIENT_CAVE, SoundSource.AMBIENT, 0.7F, 0.8F + random.nextFloat() * 0.4F);
+            level.playSound(null, pos, SoundEvents.AMBIENT_CAVE.value(), SoundSource.AMBIENT, 0.7F, 0.8F + random.nextFloat() * 0.4F);
             return true;
         }
 
