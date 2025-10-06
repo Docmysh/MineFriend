@@ -13,7 +13,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.slf4j.Logger;
 
-@Mod.EventBusSubscriber(modid = Minefriend.MODID)
+@Mod.EventBusSubscriber(modid = Minefriend.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public final class ChatEventHandler {
 
     private static final Logger LOGGER = LogUtils.getLogger();
