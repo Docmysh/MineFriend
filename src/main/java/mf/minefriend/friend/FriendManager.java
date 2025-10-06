@@ -2,6 +2,7 @@ package mf.minefriend.friend;
 
 import com.google.common.collect.ImmutableList;
 import mf.minefriend.Minefriend;
+import mf.minefriend.chat.ChatEventHandler;
 import mf.minefriend.friend.entity.FriendEntity;
 import mf.minefriend.friend.scare.EnvironmentalScareController;
 import mf.minefriend.friend.state.FriendData;
@@ -78,6 +79,7 @@ public class FriendManager {
             }
             spawnFriendIfNeeded(player, updated);
             schedulePhaseMessage(player, updated);
+            ChatEventHandler.requestInitialGreeting(player, updated.phase());
         }, () -> {
             RandomSource random = player.getRandom();
             String name = RANDOM_NAMES.get(random.nextInt(RANDOM_NAMES.size()));
@@ -86,6 +88,7 @@ public class FriendManager {
             FriendData.store(player, data);
             spawnFriendIfNeeded(player, data);
             queueSession(player, data).enqueueInitialGreeting();
+            ChatEventHandler.requestInitialGreeting(player, data.phase());
         });
     }
 
@@ -230,6 +233,7 @@ public class FriendManager {
         private boolean awaitingName;
         private boolean phaseFourInitialized;
         private int assaultCooldown;
+        private static final boolean SCRIPTED_RESPONSES_ENABLED = false;
 
         FriendDialogueSession(ServerPlayer player, FriendEntity entity, FriendData data) {
             this.player = player;
@@ -238,6 +242,9 @@ public class FriendManager {
         }
 
         void enqueueInitialGreeting() {
+            if (!SCRIPTED_RESPONSES_ENABLED) {
+                return;
+            }
             sendSoon("Hello!");
             sendSoon("o/");
             sendSoon("hi");
@@ -246,6 +253,9 @@ public class FriendManager {
         }
 
         void enqueuePhaseGreeting() {
+            if (!SCRIPTED_RESPONSES_ENABLED) {
+                return;
+            }
             switch (data.phase()) {
                 case PHASE_TWO -> {
                     sendSoon("You came back!");
@@ -271,6 +281,9 @@ public class FriendManager {
                     chatHistory.removeFirst();
                 }
             }
+            if (!SCRIPTED_RESPONSES_ENABLED) {
+                return;
+            }
             String trimmed = rawMessage.trim();
             String message = trimmed.toLowerCase(Locale.ROOT);
             String friendNameRaw = data.friendName();
@@ -295,6 +308,9 @@ public class FriendManager {
         }
 
         void handleAttack() {
+            if (!SCRIPTED_RESPONSES_ENABLED) {
+                return;
+            }
             sendSoon("Why would you do that? Friends don't do that.");
             advancePhase(FriendPhase.PHASE_TWO);
         }
@@ -314,20 +330,22 @@ public class FriendManager {
                 return false;
             });
             idleTicks++;
-            if (idleTicks == 20 * 60 && data.phase() == FriendPhase.PHASE_ONE) {
-                sendSoon("?");
-                sendAfterDelay("Are you shy?", MESSAGE_DELAY);
-                sendAfterDelay("Awesome! My name is " + data.friendName() + ".", MESSAGE_DELAY * 2);
-                idleTicks = -20 * 30;
-            }
-            if (entity != null && entity.canSendChat() && data.phase() == FriendPhase.PHASE_TWO) {
-                if (player.getRandom().nextInt(600) == 0) {
-                    sendSoon("Why did you leave?");
+            if (SCRIPTED_RESPONSES_ENABLED) {
+                if (idleTicks == 20 * 60 && data.phase() == FriendPhase.PHASE_ONE) {
+                    sendSoon("?");
+                    sendAfterDelay("Are you shy?", MESSAGE_DELAY);
+                    sendAfterDelay("Awesome! My name is " + data.friendName() + ".", MESSAGE_DELAY * 2);
+                    idleTicks = -20 * 30;
                 }
-            }
-            if (entity != null && entity.canSendChat() && data.phase() == FriendPhase.PHASE_THREE) {
-                if (player.getRandom().nextInt(800) == 0) {
-                    sendSoon("I can be you.");
+                if (entity != null && entity.canSendChat() && data.phase() == FriendPhase.PHASE_TWO) {
+                    if (player.getRandom().nextInt(600) == 0) {
+                        sendSoon("Why did you leave?");
+                    }
+                }
+                if (entity != null && entity.canSendChat() && data.phase() == FriendPhase.PHASE_THREE) {
+                    if (player.getRandom().nextInt(800) == 0) {
+                        sendSoon("I can be you.");
+                    }
                 }
             }
             if (data.phase() == FriendPhase.PHASE_FOUR) {

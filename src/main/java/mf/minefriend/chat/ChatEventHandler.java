@@ -57,6 +57,21 @@ public final class ChatEventHandler {
                 });
     }
 
+    public static void requestInitialGreeting(ServerPlayer player, FriendPhase phase) {
+        String playerName = player.getGameProfile().getName();
+        String kickoffPrompt = "The player just entered the world. Offer the first message to start the conversation.";
+        LOGGER.info("[MineFriend] Triggering initial greeting for player '{}'.", playerName);
+        LlmService.requestFriendReply(kickoffPrompt, playerName, phase)
+                .thenAccept(reply -> {
+                    LOGGER.info("[MineFriend] Initial greeting received. Broadcasting to players.");
+                    broadcastReply(player, reply);
+                })
+                .exceptionally(throwable -> {
+                    LOGGER.error("[MineFriend] Failed to retrieve initial greeting for player '{}'.", playerName, throwable);
+                    return null;
+                });
+    }
+
     private static void broadcastReply(ServerPlayer player, LlmReply reply) {
         if (reply == null || reply.isEmpty()) {
             LOGGER.warn("[MineFriend] LLM Reply was null or empty. Nothing to broadcast.");
