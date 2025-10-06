@@ -3,6 +3,7 @@ package mf.minefriend.friend;
 import com.google.common.collect.ImmutableList;
 import mf.minefriend.Minefriend;
 import mf.minefriend.friend.entity.FriendEntity;
+import mf.minefriend.friend.scare.EnvironmentalScareController;
 import mf.minefriend.friend.state.FriendData;
 import mf.minefriend.friend.state.FriendPhase;
 import net.minecraft.ChatFormatting;
@@ -46,6 +47,7 @@ public class FriendManager {
             MinecraftForge.EVENT_BUS.register(new FriendManager());
             registered = true;
         }
+        EnvironmentalScareController.init();
     }
 
     public static void onWorldLoad(ServerLevel serverLevel) {
@@ -131,6 +133,7 @@ public class FriendManager {
             });
             session.updateData(data);
             session.handlePlayerMessage(event.getMessage().getString());
+            EnvironmentalScareController.recordChat(player, event.getMessage().getString());
         });
     }
 
