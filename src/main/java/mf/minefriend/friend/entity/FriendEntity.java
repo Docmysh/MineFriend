@@ -2,6 +2,7 @@ package mf.minefriend.friend.entity;
 
 import mf.minefriend.Minefriend;
 import mf.minefriend.friend.FriendManager;
+import mf.minefriend.friend.client.FriendClientHelper;
 import mf.minefriend.friend.state.FriendData;
 import mf.minefriend.friend.state.FriendPhase;
 import net.minecraft.nbt.CompoundTag;
@@ -24,6 +25,8 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Optional;
@@ -31,6 +34,7 @@ import java.util.UUID;
 
 public class FriendEntity extends TamableAnimal {
     private static final float FOLLOW_DISTANCE = 3.0F;
+    public static final int PLAYER_SKIN_INDEX = -1;
 
     private int chatCooldown;
     private int skinIndex;
@@ -184,6 +188,12 @@ public class FriendEntity extends TamableAnimal {
     }
 
     public ResourceLocation getSkinTexture() {
+        if (skinIndex == PLAYER_SKIN_INDEX) {
+            ResourceLocation playerSkin = DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> () -> FriendClientHelper.resolveOwnerSkin(this));
+            if (playerSkin != null) {
+                return playerSkin;
+            }
+        }
         return FriendManager.getSkin(skinIndex).orElse(ResourceLocation.parse("textures/entity/steve.png"));
     }
 }

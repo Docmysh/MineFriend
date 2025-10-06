@@ -12,8 +12,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -96,6 +98,19 @@ public class FriendManager {
             FriendPhase next = data.phase().next();
             if (next != data.phase()) {
                 PENDING_PHASE_UPDATES.put(player.getUUID(), next);
+            }
+        });
+    }
+
+    @SubscribeEvent
+    public void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        FriendData.get(player).ifPresent(data -> {
+            if (data.hardcoreActive()) {
+                player.setGameMode(GameType.SPECTATOR);
+                player.displayClientMessage(Component.literal("You can't come back."), false);
             }
         });
     }
@@ -213,6 +228,8 @@ public class FriendManager {
         private int idleTicks;
         private final Deque<String> chatHistory = new ArrayDeque<>();
         private boolean awaitingName;
+        private boolean phaseFourInitialized;
+        private int assaultCooldown;
 
         FriendDialogueSession(ServerPlayer player, FriendEntity entity, FriendData data) {
             this.player = player;
@@ -236,17 +253,10 @@ public class FriendManager {
                 }
                 case PHASE_THREE -> sendSoon("We look so much alike now.");
                 case PHASE_FOUR -> {
-                    teleportToCave();
-                    sendSoon("It's done.");
-                    sendAfterDelay("Thanks for showing me how to be me.", MESSAGE_DELAY);
-                    sendAfterDelay("I told you I liked your skin. It fits perfectly.", MESSAGE_DELAY * 2);
-                    sendAfterDelay("This is my house now. This is my world now.", MESSAGE_DELAY * 3);
-                    sendAfterDelay("All your items... all your pets... they're safe with me.", MESSAGE_DELAY * 4);
-                    sendAfterDelay("You were just the template, after all.", MESSAGE_DELAY * 5);
-                    sendAfterDelay("You don't belong here anymore.", MESSAGE_DELAY * 6);
-                    sendAfterDelay("You're the ghost now.", MESSAGE_DELAY * 7);
-                    sendAfterDelay("Don't try to come back. This world has already forgotten you.", MESSAGE_DELAY * 8);
-                    sendAfterDelay("Goodbye.", MESSAGE_DELAY * 10);
+                    ensurePhaseFourPrepared();
+                    sendSoon("I'm going to take your place now.");
+                    sendAfterDelay("I'll make it so you'll never be able to come back.", MESSAGE_DELAY * 2);
+                    sendAfterDelay("This world will forget you.", MESSAGE_DELAY * 4);
                 }
                 default -> {
                 }
@@ -319,6 +329,10 @@ public class FriendManager {
                 if (player.getRandom().nextInt(800) == 0) {
                     sendSoon("I can be you.");
                 }
+            }
+            if (data.phase() == FriendPhase.PHASE_FOUR) {
+                ensurePhaseFourPrepared();
+                performPhaseFourAggression();
             }
         }
 
@@ -437,6 +451,10 @@ public class FriendManager {
 
         private void advancePhase(FriendPhase newPhase) {
             FriendData updated = data.withPhase(newPhase);
+            if (newPhase == FriendPhase.PHASE_FOUR) {
+                updated = updated.withSkinIndex(FriendEntity.PLAYER_SKIN_INDEX).withHardcore(true);
+                phaseFourInitialized = false;
+            }
             FriendData.store(player, updated);
             updateData(updated);
             if (entity != null) {
@@ -477,6 +495,66 @@ public class FriendManager {
 
         private boolean isCavePocket(ServerLevel level, BlockPos pos) {
             return level.getBlockState(pos).isAir() && level.getBlockState(pos.above()).isAir() && !level.getBlockState(pos.below()).isAir();
+        }
+
+        private void ensurePhaseFourPrepared() {
+            if (data.phase() != FriendPhase.PHASE_FOUR) {
+                return;
+            }
+            mimicPlayerSkin();
+            if (!phaseFourInitialized) {
+                teleportToCave();
+                enforceHardcoreMode();
+                phaseFourInitialized = true;
+                assaultCooldown = 40;
+            }
+        }
+
+        private void mimicPlayerSkin() {
+            if (data.skinIndex() == FriendEntity.PLAYER_SKIN_INDEX) {
+                if (entity != null) {
+                    entity.setSkinIndex(FriendEntity.PLAYER_SKIN_INDEX);
+                }
+                return;
+            }
+            FriendData updated = data.withSkinIndex(FriendEntity.PLAYER_SKIN_INDEX);
+            FriendData.store(player, updated);
+            updateData(updated);
+        }
+
+        private void enforceHardcoreMode() {
+            if (!data.hardcoreActive()) {
+                FriendData updated = data.withHardcore(true);
+                FriendData.store(player, updated);
+                updateData(updated);
+            }
+            if (player.gameMode.getGameModeForPlayer() != GameType.SURVIVAL) {
+                player.setGameMode(GameType.SURVIVAL);
+            }
+        }
+
+        private void performPhaseFourAggression() {
+            if (player.isSpectator()) {
+                return;
+            }
+            if (player.isCreative()) {
+                player.setGameMode(GameType.SURVIVAL);
+            }
+            if (entity == null || entity.isRemoved()) {
+                entity = findFriendEntity(player.serverLevel(), data.entityId());
+            }
+            if (entity != null) {
+                entity.getNavigation().moveTo(player, 1.4D);
+                entity.lookAt(player, 45.0F, 45.0F);
+                if (entity.distanceToSqr(player) <= 9.0D && assaultCooldown <= 0) {
+                    DamageSource source = player.damageSources().mobAttack(entity);
+                    player.hurt(source, 6.0F);
+                    assaultCooldown = 40;
+                }
+            }
+            if (assaultCooldown > 0) {
+                assaultCooldown--;
+            }
         }
 
         private void sendChat(Component component) {
@@ -530,6 +608,9 @@ public class FriendManager {
             if (entity != null) {
                 entity.setFriendName(data.friendName());
                 entity.setSkinIndex(data.skinIndex());
+            }
+            if (data.phase() == FriendPhase.PHASE_FOUR) {
+                phaseFourInitialized = false;
             }
         }
 
