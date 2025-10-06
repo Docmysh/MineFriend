@@ -47,10 +47,13 @@ public final class LlmService {
         String systemPrompt = buildSystemPrompt(personaName, playerName, phase);
         String sanitizedMessage = playerMessage.replace("\r", " ").replace("\n", " ").trim();
 
-        // --- FIX: Set the model name to null ---
-        // This is a common requirement for LM Studio and other local servers.
-        // It tells the server to use whichever model is currently loaded,
-        // avoiding mismatches between the code and the server UI.
+        // --- FIX: Add a guard clause to prevent sending empty messages ---
+        if (sanitizedMessage.isBlank()) {
+            LOGGER.warn("[MineFriend-LlmService] Player message was blank after sanitizing. Skipping LLM request.");
+            // Return a future that completes immediately with an empty reply
+            return CompletableFuture.completedFuture(new LlmReply(personaName, "", null));
+        }
+
         ChatRequest chatRequest = new ChatRequest(
                 null,
                 List.of(
@@ -67,8 +70,7 @@ public final class LlmService {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(LLM_API_URL))
                 .header("Content-Type", "application/json")
-                // Increased timeout slightly as a safety measure for slow models
-                .timeout(Duration.ofSeconds(30))
+                .timeout(Duration.ofSeconds(60))
                 .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8))
                 .build();
 
