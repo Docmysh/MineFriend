@@ -10,10 +10,12 @@ import net.minecraft.world.entity.Entity;
 import java.util.Optional;
 import java.util.UUID;
 
-public record FriendData(UUID owner, UUID entityId, String friendName, int skinIndex, FriendPhase phase, int negativeResponses, boolean hardcoreActive) {
+public record FriendData(UUID owner, UUID entityId, String friendName, int skinIndex, FriendPhase phase, int negativeResponses,
+                         boolean hardcoreActive, boolean phaseOneScriptDisabled) {
     private static final String DATA_KEY = "MineFriend";
 
-    public FriendData(UUID owner, UUID entityId, String friendName, int skinIndex, FriendPhase phase, int negativeResponses, boolean hardcoreActive) {
+    public FriendData(UUID owner, UUID entityId, String friendName, int skinIndex, FriendPhase phase, int negativeResponses,
+                      boolean hardcoreActive, boolean phaseOneScriptDisabled) {
         this.owner = owner;
         this.entityId = entityId;
         this.friendName = friendName;
@@ -21,10 +23,11 @@ public record FriendData(UUID owner, UUID entityId, String friendName, int skinI
         this.phase = phase;
         this.negativeResponses = negativeResponses;
         this.hardcoreActive = hardcoreActive;
+        this.phaseOneScriptDisabled = phaseOneScriptDisabled;
     }
 
     public static FriendData create(ServerPlayer player, String friendName, int skinIndex) {
-        return new FriendData(player.getUUID(), null, friendName, skinIndex, FriendPhase.PHASE_ONE, 0, false);
+        return new FriendData(player.getUUID(), null, friendName, skinIndex, FriendPhase.PHASE_ONE, 0, false, false);
     }
 
     public Component getDisplayNameComponent() {
@@ -32,27 +35,31 @@ public record FriendData(UUID owner, UUID entityId, String friendName, int skinI
     }
 
     public FriendData withEntity(UUID entityId) {
-        return new FriendData(owner, entityId, friendName, skinIndex, phase, negativeResponses, hardcoreActive);
+        return new FriendData(owner, entityId, friendName, skinIndex, phase, negativeResponses, hardcoreActive, phaseOneScriptDisabled);
     }
 
     public FriendData withPhase(FriendPhase newPhase) {
-        return new FriendData(owner, entityId, friendName, skinIndex, newPhase, negativeResponses, hardcoreActive);
+        return new FriendData(owner, entityId, friendName, skinIndex, newPhase, negativeResponses, hardcoreActive, phaseOneScriptDisabled);
     }
 
     public FriendData withNegativeResponses(int count) {
-        return new FriendData(owner, entityId, friendName, skinIndex, phase, count, hardcoreActive);
+        return new FriendData(owner, entityId, friendName, skinIndex, phase, count, hardcoreActive, phaseOneScriptDisabled);
     }
 
     public FriendData withName(String newName) {
-        return new FriendData(owner, entityId, newName, skinIndex, phase, negativeResponses, hardcoreActive);
+        return new FriendData(owner, entityId, newName, skinIndex, phase, negativeResponses, hardcoreActive, phaseOneScriptDisabled);
     }
 
     public FriendData withSkinIndex(int newSkinIndex) {
-        return new FriendData(owner, entityId, friendName, newSkinIndex, phase, negativeResponses, hardcoreActive);
+        return new FriendData(owner, entityId, friendName, newSkinIndex, phase, negativeResponses, hardcoreActive, phaseOneScriptDisabled);
     }
 
     public FriendData withHardcore(boolean active) {
-        return new FriendData(owner, entityId, friendName, skinIndex, phase, negativeResponses, active);
+        return new FriendData(owner, entityId, friendName, skinIndex, phase, negativeResponses, active, phaseOneScriptDisabled);
+    }
+
+    public FriendData withPhaseOneScriptDisabled(boolean disabled) {
+        return new FriendData(owner, entityId, friendName, skinIndex, phase, negativeResponses, hardcoreActive, disabled);
     }
 
     public static Optional<FriendData> get(ServerPlayer player) {
@@ -67,7 +74,8 @@ public record FriendData(UUID owner, UUID entityId, String friendName, int skinI
         FriendPhase phase = FriendPhase.byId(data.getInt("Phase"));
         int negatives = data.getInt("Negatives");
         boolean hardcore = data.getBoolean("HardcoreActive");
-        return Optional.of(new FriendData(owner, entityId, name, skin, phase, negatives, hardcore));
+        boolean phaseOneDisabled = data.getBoolean("PhaseOneScriptDisabled");
+        return Optional.of(new FriendData(owner, entityId, name, skin, phase, negatives, hardcore, phaseOneDisabled));
     }
 
     public static Optional<FriendData> get(Entity entity) {
@@ -88,6 +96,7 @@ public record FriendData(UUID owner, UUID entityId, String friendName, int skinI
         tag.putInt("Phase", data.phase.getId());
         tag.putInt("Negatives", data.negativeResponses);
         tag.putBoolean("HardcoreActive", data.hardcoreActive);
+        tag.putBoolean("PhaseOneScriptDisabled", data.phaseOneScriptDisabled);
         player.getPersistentData().put(DATA_KEY, tag);
     }
 
@@ -107,7 +116,7 @@ public record FriendData(UUID owner, UUID entityId, String friendName, int skinI
         if (player == null) {
             return;
         }
-        FriendData data = new FriendData(ownerId, entityId, name, skinIndex, phase, 0, false);
+        FriendData data = new FriendData(ownerId, entityId, name, skinIndex, phase, 0, false, false);
         store(player, data);
     }
 }

@@ -337,16 +337,22 @@ public class FriendManager {
         }
 
         private void handlePhaseOne(String message) {
+            if (data.phaseOneScriptDisabled()) {
+                return;
+            }
             if (containsAny(message, "yes", "sure", "ok", "yeah", "hello friend", "hi")) {
                 sendSoon("Yay! We're going to have so much fun.");
                 sendAfterDelay("Awesome! My name is " + data.friendName() + ".", MESSAGE_DELAY);
                 idleTicks = 0;
+                disablePhaseOneScript();
             } else if (containsAny(message, "no", "go away", "leave", "maybe", "nah")) {
                 sendSoon("Oh.");
                 sendAfterDelay("Are you sure? I just want a friend.", MESSAGE_DELAY);
                 int negatives = data.negativeResponses() + 1;
                 FriendData updated = data.withNegativeResponses(negatives);
                 FriendData.store(player, updated);
+                updateData(updated);
+                disablePhaseOneScript();
                 if (negatives > 1) {
                     sendAfterDelay("...", MESSAGE_DELAY * 2);
                     advancePhase(FriendPhase.PHASE_TWO);
@@ -385,6 +391,15 @@ public class FriendManager {
             } else if (containsAny(message, "dance")) {
                 sendSoon("Only if you dance with me!");
             }
+        }
+
+        private void disablePhaseOneScript() {
+            if (data.phaseOneScriptDisabled()) {
+                return;
+            }
+            FriendData updated = data.withPhaseOneScriptDisabled(true);
+            FriendData.store(player, updated);
+            updateData(updated);
         }
 
         private void handlePhaseTwo(String message) {
