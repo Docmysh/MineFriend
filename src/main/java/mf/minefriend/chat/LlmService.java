@@ -25,10 +25,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class LlmService {
-    // --- FIX: Added a dedicated logger for this class ---
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    // --- FIX: Created a new HttpClient with a timeout ---
     private static final HttpClient CLIENT = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(15))
             .build();
@@ -49,8 +47,12 @@ public final class LlmService {
         String systemPrompt = buildSystemPrompt(personaName, playerName, phase);
         String sanitizedMessage = playerMessage.replace("\r", " ").replace("\n", " ").trim();
 
+        // --- FIX: Set the model name to null ---
+        // This is a common requirement for LM Studio and other local servers.
+        // It tells the server to use whichever model is currently loaded,
+        // avoiding mismatches between the code and the server UI.
         ChatRequest chatRequest = new ChatRequest(
-                "qwen3",
+                null,
                 List.of(
                         new Message("system", systemPrompt),
                         new Message("user", sanitizedMessage)
@@ -60,13 +62,13 @@ public final class LlmService {
 
         String payload = GSON.toJson(chatRequest);
 
-        // --- DEBUG LOG: Log the exact payload being sent ---
         LOGGER.info("[MineFriend-LlmService] Sending payload: {}", payload);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(LLM_API_URL))
                 .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(20)) // Add a request-specific timeout as well
+                // Increased timeout slightly as a safety measure for slow models
+                .timeout(Duration.ofSeconds(30))
                 .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8))
                 .build();
 
@@ -145,7 +147,6 @@ public final class LlmService {
     }
 
     private static String parseResponse(String jsonBody) {
-        // --- DEBUG LOG: Log the raw response from the server ---
         LOGGER.info("[MineFriend-LlmService] Received raw response: {}", jsonBody);
         try {
             JsonElement parsed = JsonParser.parseString(jsonBody);
