@@ -15,6 +15,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.ServerChatEvent;
@@ -117,8 +118,8 @@ public class FriendManager {
 
     @SubscribeEvent
     public void onWorldUnload(LevelEvent.Unload event) {
-        Level level = event.getLevel();
-        if (!level.isClientSide() && level instanceof ServerLevel serverLevel) {
+        LevelAccessor level = event.getLevel();
+        if (level instanceof ServerLevel serverLevel) {
             ACTIVE_DIALOGUE.values().removeIf(session -> session.level() == serverLevel);
         }
     }
