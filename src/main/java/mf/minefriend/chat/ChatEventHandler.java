@@ -25,10 +25,13 @@ public final class ChatEventHandler {
     public static void onPlayerChat(ServerChatEvent event) {
         ServerPlayer player = event.getPlayer();
         String playerMessage = event.getMessage().getString();
+        // --- FIX: Get the player's name to pass to the service ---
+        String playerName = player.getGameProfile().getName();
 
         FriendPhase phase = FriendData.get(player).map(FriendData::phase).orElse(FriendPhase.PHASE_ONE);
 
-        LlmService.requestFriendReply(playerMessage, phase)
+        // --- FIX: Pass the playerName to the requestFriendReply method ---
+        LlmService.requestFriendReply(playerMessage, playerName, phase)
                 .thenAccept(reply -> broadcastReply(player, reply))
                 .exceptionally(throwable -> {
                     LOGGER.error("Failed to retrieve LLM response", throwable);
