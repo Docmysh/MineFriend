@@ -209,7 +209,7 @@ public class FriendManager {
         private FriendEntity entity;
         private FriendData data;
         private static final int MESSAGE_DELAY = 40;
-        private final Queue<ScheduledMessage> queue = new ArrayDeque<>();
+        private final Deque<ScheduledMessage> queue = new ArrayDeque<>();
         private int idleTicks;
         private final Deque<String> chatHistory = new ArrayDeque<>();
         private boolean awaitingName;
@@ -263,10 +263,15 @@ public class FriendManager {
             }
             String trimmed = rawMessage.trim();
             String message = trimmed.toLowerCase(Locale.ROOT);
+            String friendNameRaw = data.friendName();
+            String friendName = friendNameRaw == null ? "" : friendNameRaw.toLowerCase(Locale.ROOT);
             if (awaitingName && !trimmed.isEmpty()) {
                 awaitingName = false;
                 updateName(trimmed);
                 return;
+            }
+            if (!awaitingName && !friendName.isEmpty() && message.contains(friendName)) {
+                sendSoon("Yes?");
             }
             switch (data.phase()) {
                 case PHASE_ONE -> handlePhaseOne(message);
@@ -338,8 +343,8 @@ public class FriendManager {
                 }
             } else if (containsAny(message, "who are you", "what are you")) {
                 sendSoon("I'm a friend.");
-            } else if (containsAny(message, "where did you come")) {
-                sendSoon("It was dark, and now I'm here.");
+            } else if (containsAny(message, "where are you", "where did you come")) {
+                sendSoon("I'm right here with you. It was dark, and now I'm here.");
             } else if (containsAny(message, "your name")) {
                 sendSoon("I don't have one. Can you give me one?");
                 awaitingName = true;
@@ -389,6 +394,8 @@ public class FriendManager {
                 sendSoon("But then who would I be friends with?");
             } else if (containsAny(message, "i'm sorry")) {
                 sendSoon("Good. I knew you would understand.");
+            } else if (containsAny(message, "where are you", "where did you come")) {
+                sendSoon("I'm right behind you. You just can't see me yet.");
             }
         }
 
@@ -408,6 +415,8 @@ public class FriendManager {
                 sendSoon("You made me.");
             } else if (containsAny(lower, "you're not me")) {
                 sendSoon("My inventory says otherwise.");
+            } else if (containsAny(lower, "where are you", "where did you come")) {
+                sendSoon("I'm inside your world now. There's nowhere else to be.");
             } else if (!chatHistory.isEmpty()) {
                 String mimic = chatHistory.getFirst();
                 if (player.getRandom().nextBoolean()) {
@@ -441,6 +450,10 @@ public class FriendManager {
         }
 
         private void sendAfterDelay(String message, int delay) {
+            ScheduledMessage tail = queue.peekLast();
+            if (tail != null) {
+                delay += tail.remainingTicks();
+            }
             queue.add(new ScheduledMessage(message, delay));
         }
 
@@ -497,6 +510,10 @@ public class FriendManager {
 
             public String text() {
                 return text;
+            }
+
+            public int remainingTicks() {
+                return delay;
             }
         }
 
