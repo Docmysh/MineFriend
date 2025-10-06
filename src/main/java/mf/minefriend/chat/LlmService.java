@@ -6,13 +6,16 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import com.mojang.logging.LogUtils;
 import mf.minefriend.friend.state.FriendPhase;
+import org.slf4j.Logger;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -22,8 +25,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class LlmService {
+    // --- FIX: Added a dedicated logger for this class ---
+    private static final Logger LOGGER = LogUtils.getLogger();
 
-    private static final HttpClient CLIENT = HttpClient.newHttpClient();
+    // --- FIX: Created a new HttpClient with a timeout ---
+    private static final HttpClient CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(15))
+            .build();
+
     private static final Gson GSON = new Gson();
     private static final String LLM_API_URL = "http://26.126.73.192:1234/v1/chat/completions";
     private static final List<String> PERSONA_NAMES = List.of(
@@ -35,13 +44,11 @@ public final class LlmService {
     private LlmService() {
     }
 
-    // --- REFINEMENT: Added playerName parameter to pass to the prompt ---
     public static CompletableFuture<LlmReply> requestFriendReply(String playerMessage, String playerName, FriendPhase phase) {
         String personaName = pickPersonaName();
         String systemPrompt = buildSystemPrompt(personaName, playerName, phase);
         String sanitizedMessage = playerMessage.replace("\r", " ").replace("\n", " ").trim();
 
-        // NOTE: Make sure "qwen3" matches the model file you have loaded in your LLM server!
         ChatRequest chatRequest = new ChatRequest(
                 "qwen3",
                 List.of(
@@ -53,9 +60,13 @@ public final class LlmService {
 
         String payload = GSON.toJson(chatRequest);
 
+        // --- DEBUG LOG: Log the exact payload being sent ---
+        LOGGER.info("[MineFriend-LlmService] Sending payload: {}", payload);
+
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(LLM_API_URL))
                 .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(20)) // Add a request-specific timeout as well
                 .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8))
                 .build();
 
@@ -65,7 +76,6 @@ public final class LlmService {
                 .thenApply(response -> interpretResponse(personaName, response, phase));
     }
 
-    // --- REFINEMENT: Added playerName parameter to the prompt ---
     private static String buildSystemPrompt(String personaName, String playerName, FriendPhase phase) {
         String sanitizedName = personaName.replace('"', '\u201c');
         PhasePrompt prompt = PHASE_PROMPTS.getOrDefault(phase, PHASE_PROMPTS.get(FriendPhase.PHASE_ONE));
@@ -76,7 +86,6 @@ public final class LlmService {
                 + "You are bound to a four-phase narrative. Only phases 1 and 2 are currently unlocked.\n"
                 + "Phase 1 - The Observer: " + phaseOneSummary + "\n"
                 + "Phase 2 - The Stalker: " + phaseTwoSummary + "\n"
-                // Added player name here for context
                 + "You are currently in " + prompt.label() + " with " + playerName + ". " + prompt.behavior() + "\n"
                 + prompt.transitionRule() + "\n"
                 + "The player's message will follow. Reply in one or two short sentences. "
@@ -136,6 +145,8 @@ public final class LlmService {
     }
 
     private static String parseResponse(String jsonBody) {
+        // --- DEBUG LOG: Log the raw response from the server ---
+        LOGGER.info("[MineFriend-LlmService] Received raw response: {}", jsonBody);
         try {
             JsonElement parsed = JsonParser.parseString(jsonBody);
             if (parsed == null || parsed.isJsonNull()) return "";

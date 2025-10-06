@@ -23,24 +23,43 @@ public final class ChatEventHandler {
 
     @SubscribeEvent
     public static void onPlayerChat(ServerChatEvent event) {
+        // --- DEBUG LOG 1: Confirm the event is firing ---
+        LOGGER.info("[MineFriend] onPlayerChat event fired.");
+
         ServerPlayer player = event.getPlayer();
         String playerMessage = event.getMessage().getString();
-        // --- FIX: Get the player's name to pass to the service ---
         String playerName = player.getGameProfile().getName();
+
+        // --- DEBUG LOG 2: Confirm we have the correct data ---
+        LOGGER.info("[MineFriend] Captured message: '{}' from player: '{}'", playerMessage, playerName);
 
         FriendPhase phase = FriendData.get(player).map(FriendData::phase).orElse(FriendPhase.PHASE_ONE);
 
-        // --- FIX: Pass the playerName to the requestFriendReply method ---
+        // --- DEBUG LOG 3: Confirm the current phase ---
+        LOGGER.info("[MineFriend] Current friend phase is: {}", phase);
+
+        // --- DEBUG LOG 4: Confirm we are about to make the request ---
+        LOGGER.info("[MineFriend] Sending request to LlmService...");
         LlmService.requestFriendReply(playerMessage, playerName, phase)
-                .thenAccept(reply -> broadcastReply(player, reply))
+                .thenAccept(reply -> {
+                    // --- DEBUG LOG 5: Confirm a successful reply ---
+                    LOGGER.info("[MineFriend] Successfully received LLM reply. Broadcasting...");
+                    broadcastReply(player, reply);
+                })
                 .exceptionally(throwable -> {
-                    LOGGER.error("Failed to retrieve LLM response", throwable);
+                    // --- DEBUG LOG 6: Make errors very clear ---
+                    LOGGER.error("==========================================================");
+                    LOGGER.error("[MineFriend] CRITICAL: FAILED TO GET LLM RESPONSE!");
+                    LOGGER.error("Check your network, RadminVPN IP, port, and LLM server status.");
+                    LOGGER.error("Error details: ", throwable);
+                    LOGGER.error("==========================================================");
                     return null;
                 });
     }
 
     private static void broadcastReply(ServerPlayer player, LlmReply reply) {
         if (reply == null || reply.isEmpty()) {
+            LOGGER.warn("[MineFriend] LLM Reply was null or empty. Nothing to broadcast.");
             return;
         }
         player.serverLevel().getServer().execute(() -> {
@@ -71,6 +90,7 @@ public final class ChatEventHandler {
             if (suggested == current) {
                 return;
             }
+            LOGGER.info("[MineFriend] Phase transition suggested from {} to {}. Applying.", current, suggested);
             FriendData updated = data.withPhase(suggested);
             FriendData.store(player, updated);
         });
@@ -80,3 +100,4 @@ public final class ChatEventHandler {
         return phase == FriendPhase.NONE || phase == FriendPhase.PHASE_ONE || phase == FriendPhase.PHASE_TWO;
     }
 }
+
