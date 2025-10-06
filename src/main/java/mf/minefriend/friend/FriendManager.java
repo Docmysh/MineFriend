@@ -34,9 +34,9 @@ public class FriendManager {
             "Eli", "Nova", "Ash", "Rowan", "Mira", "Kai", "Luca", "Ivy", "Avery", "Robin"
     );
     private static final List<ResourceLocation> SKIN_LOCATIONS = ImmutableList.of(
-            new ResourceLocation(Minefriend.MODID, "textures/entity/friend/skin0.png"),
-            new ResourceLocation(Minefriend.MODID, "textures/entity/friend/skin1.png"),
-            new ResourceLocation(Minefriend.MODID, "textures/entity/friend/skin2.png")
+            ResourceLocation.fromNamespaceAndPath(Minefriend.MODID, "textures/entity/friend/skin0.png"),
+            ResourceLocation.fromNamespaceAndPath(Minefriend.MODID, "textures/entity/friend/skin1.png"),
+            ResourceLocation.fromNamespaceAndPath(Minefriend.MODID, "textures/entity/friend/skin2.png")
     );
 
     private static final Map<UUID, FriendDialogueSession> ACTIVE_DIALOGUE = new ConcurrentHashMap<>();

@@ -200,29 +200,29 @@ public class EnvironmentalScareController {
         private boolean playChestSound(ServerPlayer player, RandomSource random) {
             BlockPos pos = player.blockPosition().offset(randomOffset(random, 4), 0, randomOffset(random, 4));
             ServerLevel level = player.serverLevel();
-            level.playSound(null, pos, SoundEvents.CHEST_OPEN.value(), SoundSource.BLOCKS, 0.6F, 0.9F + random.nextFloat() * 0.2F);
-            level.playSound(null, pos, SoundEvents.CHEST_CLOSE.value(), SoundSource.BLOCKS, 0.6F, 0.9F + random.nextFloat() * 0.2F);
+            level.playSound(null, pos, SoundEvents.CHEST_OPEN, SoundSource.BLOCKS, 0.6F, 0.9F + random.nextFloat() * 0.2F);
+            level.playSound(null, pos, SoundEvents.CHEST_CLOSE, SoundSource.BLOCKS, 0.6F, 0.9F + random.nextFloat() * 0.2F);
             return true;
         }
 
         private boolean playFootstepSound(ServerPlayer player, RandomSource random) {
             ServerLevel level = player.serverLevel();
             BlockPos pos = player.blockPosition().offset(randomOffset(random, 3), 0, randomOffset(random, 3));
-            level.playSound(null, pos, SoundEvents.WOODEN_TRAPDOOR_CLOSE.value(), SoundSource.PLAYERS, 0.6F, 0.8F + random.nextFloat() * 0.4F);
+            level.playSound(null, pos, SoundEvents.WOODEN_TRAPDOOR_CLOSE, SoundSource.PLAYERS, 0.6F, 0.8F + random.nextFloat() * 0.4F);
             return true;
         }
 
         private boolean playPlayerHurtSound(ServerPlayer player, RandomSource random) {
             ServerLevel level = player.serverLevel();
             BlockPos pos = player.blockPosition();
-            level.playSound(player, pos, SoundEvents.PLAYER_HURT.value(), SoundSource.PLAYERS, 0.8F, 0.9F + random.nextFloat() * 0.2F);
+            level.playSound(player, pos, SoundEvents.PLAYER_HURT, SoundSource.PLAYERS, 0.8F, 0.9F + random.nextFloat() * 0.2F);
             return true;
         }
 
         private boolean playCaveSound(ServerPlayer player, RandomSource random) {
             ServerLevel level = player.serverLevel();
             BlockPos pos = player.blockPosition();
-            level.playSound(null, pos, SoundEvents.AMBIENT_CAVE.value(), SoundSource.AMBIENT, 0.7F, 0.8F + random.nextFloat() * 0.4F);
+            level.playSound(null, pos, SoundEvents.AMBIENT_CAVE, SoundSource.AMBIENT, 0.7F, 0.8F + random.nextFloat() * 0.4F);
             return true;
         }
 
@@ -259,7 +259,9 @@ public class EnvironmentalScareController {
                 if (!(below.is(Blocks.GRASS_BLOCK) || below.is(Blocks.DIRT) || below.is(Blocks.PODZOL))) {
                     continue;
                 }
-                BlockState flower = BuiltInRegistries.BLOCK.get(new ResourceLocation("minecraft", randomFlower(random))).defaultBlockState();
+                BlockState flower = BuiltInRegistries.BLOCK
+                        .get(ResourceLocation.fromNamespaceAndPath("minecraft", randomFlower(random)))
+                        .defaultBlockState();
                 if (!(flower.getBlock() instanceof FlowerBlock)) {
                     continue;
                 }
@@ -486,7 +488,7 @@ public class EnvironmentalScareController {
             pet.setOrderedToSit(true);
             Vec3 offset = new Vec3(random.nextDouble() - 0.5D, 0.0D, random.nextDouble() - 0.5D).normalize();
             pet.setYRot((float) (Mth.atan2(offset.z, offset.x) * (180F / Math.PI)));
-            pet.playSound((pet instanceof Cat ? SoundEvents.CAT_HISS : SoundEvents.WOLF_GROWL).value(), 0.8F, 0.9F + random.nextFloat() * 0.2F);
+            pet.playSound((pet instanceof Cat ? SoundEvents.CAT_HISS : SoundEvents.WOLF_GROWL), 0.8F, 0.9F + random.nextFloat() * 0.2F);
             return true;
         }
 
@@ -620,7 +622,7 @@ public class EnvironmentalScareController {
             }
             pets.forEach(pet -> {
                 pet.setOrderedToSit(true);
-                pet.playSound((pet instanceof Cat ? SoundEvents.CAT_HISS : SoundEvents.WOLF_GROWL).value(), 0.8F, 0.6F + random.nextFloat() * 0.2F);
+                pet.playSound((pet instanceof Cat ? SoundEvents.CAT_HISS : SoundEvents.WOLF_GROWL), 0.8F, 0.6F + random.nextFloat() * 0.2F);
             });
             return true;
         }
@@ -634,7 +636,7 @@ public class EnvironmentalScareController {
             villagers.forEach(villager -> {
                 Vec3 away = villager.position().vectorTo(player.position()).normalize().scale(-1.5);
                 villager.getNavigation().moveTo(villager.getX() + away.x, villager.getY(), villager.getZ() + away.z, 1.2D);
-                villager.playSound(SoundEvents.VILLAGER_NO.value(), 1.0F, 0.6F + random.nextFloat() * 0.2F);
+                villager.playSound(SoundEvents.VILLAGER_NO, 1.0F, 0.6F + random.nextFloat() * 0.2F);
             });
             return true;
         }

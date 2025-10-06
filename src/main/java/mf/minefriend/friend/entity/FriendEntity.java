@@ -184,6 +184,6 @@ public class FriendEntity extends TamableAnimal {
     }
 
     public ResourceLocation getSkinTexture() {
-        return FriendManager.getSkin(skinIndex).orElse(new ResourceLocation("textures/entity/steve.png"));
+        return FriendManager.getSkin(skinIndex).orElse(ResourceLocation.parse("textures/entity/steve.png"));
     }
 }
