@@ -59,7 +59,7 @@ public final class ChatEventHandler {
 
     public static void requestInitialGreeting(ServerPlayer player, FriendPhase phase) {
         String playerName = player.getGameProfile().getName();
-        String kickoffPrompt = "The player just entered the world. Offer the first message to start the conversation.";
+        String kickoffPrompt = "A friend entity has just appeared. Say hi to the player and introduce yourself.";
         LOGGER.info("[MineFriend] Triggering initial greeting for player '{}'.", playerName);
         LlmService.requestFriendReply(kickoffPrompt, playerName, phase)
                 .thenAccept(reply -> {

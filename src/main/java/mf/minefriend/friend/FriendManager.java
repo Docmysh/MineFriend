@@ -79,7 +79,6 @@ public class FriendManager {
             }
             spawnFriendIfNeeded(player, updated);
             schedulePhaseMessage(player, updated);
-            ChatEventHandler.requestInitialGreeting(player, updated.phase());
         }, () -> {
             RandomSource random = player.getRandom();
             String name = RANDOM_NAMES.get(random.nextInt(RANDOM_NAMES.size()));
@@ -88,7 +87,6 @@ public class FriendManager {
             FriendData.store(player, data);
             spawnFriendIfNeeded(player, data);
             queueSession(player, data).enqueueInitialGreeting();
-            ChatEventHandler.requestInitialGreeting(player, data.phase());
         });
     }
 
@@ -130,6 +128,7 @@ public class FriendManager {
                 FriendDialogueSession session = ACTIVE_DIALOGUE.computeIfAbsent(player.getUUID(), uuid -> new FriendDialogueSession(player, friendEntity, updated));
                 session.updateEntity(friendEntity);
                 session.updateData(updated);
+                ChatEventHandler.requestInitialGreeting(player, updated.phase());
             });
         });
     }
