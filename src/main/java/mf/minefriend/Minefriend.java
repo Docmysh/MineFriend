@@ -1,8 +1,16 @@
 package mf.minefriend;
 
 import com.mojang.logging.LogUtils;
+import mf.minefriend.friend.FriendManager;
+import mf.minefriend.friend.entity.FriendEntity;
+import mf.minefriend.friend.client.FriendRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
@@ -27,6 +35,7 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
+import net.minecraft.client.renderer.entity.EntityRenderers;
 import org.slf4j.Logger;
 
 // The value here should match an entry in the META-INF/mods.toml file
@@ -43,6 +52,8 @@ public class Minefriend {
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, MODID);
     // Create a Deferred Register to hold CreativeModeTabs which will all be registered under the "minefriend" namespace
     public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
+    // Create a Deferred Register to hold EntityTypes which will all be registered under the "minefriend" namespace
+    public static final DeferredRegister<EntityType<?>> ENTITY_TYPES = DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, MODID);
 
     // Creates a new Block with the id "minefriend:example_block", combining the namespace and path
     public static final RegistryObject<Block> EXAMPLE_BLOCK = BLOCKS.register("example_block", () -> new Block(BlockBehaviour.Properties.of().mapColor(MapColor.STONE)));
@@ -57,6 +68,11 @@ public class Minefriend {
         output.accept(EXAMPLE_ITEM.get()); // Add the example item to the tab. For your own tabs, this method is preferred over the event
     }).build());
 
+    public static final RegistryObject<EntityType<FriendEntity>> FRIEND_ENTITY = ENTITY_TYPES.register("friend", () -> EntityType.Builder.<FriendEntity>of(FriendEntity::new, MobCategory.CREATURE)
+            .sized(0.6f, 1.8f)
+            .clientTrackingRange(8)
+            .build("friend"));
+
     public Minefriend() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
@@ -69,6 +85,8 @@ public class Minefriend {
         ITEMS.register(modEventBus);
         // Register the Deferred Register to the mod event bus so tabs get registered
         CREATIVE_MODE_TABS.register(modEventBus);
+        // Register entity types
+        ENTITY_TYPES.register(modEventBus);
 
         // Register ourselves for server and other game events we are interested in
         MinecraftForge.EVENT_BUS.register(this);
@@ -76,8 +94,13 @@ public class Minefriend {
         // Register the item to a creative tab
         modEventBus.addListener(this::addCreative);
 
+        // Attribute assignment for entities
+        modEventBus.addListener(this::registerAttributes);
+
         // Register our mod's ForgeConfigSpec so that Forge can create and load the config file for us
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, Config.SPEC);
+
+        FriendManager.init();
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
@@ -104,6 +127,13 @@ public class Minefriend {
         LOGGER.info("HELLO from server starting");
     }
 
+    @SubscribeEvent
+    public void onLevelLoad(LevelEvent.Load event) {
+        if (event.getLevel() instanceof ServerLevel serverLevel) {
+            FriendManager.onWorldLoad(serverLevel);
+        }
+    }
+
     // You can use EventBusSubscriber to automatically register all static methods in the class annotated with @SubscribeEvent
     @Mod.EventBusSubscriber(modid = MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
     public static class ClientModEvents {
@@ -113,6 +143,14 @@ public class Minefriend {
             // Some client setup code
             LOGGER.info("HELLO FROM CLIENT SETUP");
             LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
+            event.enqueueWork(() -> EntityRenderers.register(Minefriend.FRIEND_ENTITY.get(), FriendRenderer::new));
         }
+    }
+
+    private void registerAttributes(EntityAttributeCreationEvent event) {
+        AttributeSupplier.Builder builder = FriendEntity.createAttributes()
+                .add(Attributes.MOVEMENT_SPEED, 0.3D)
+                .add(Attributes.MAX_HEALTH, 20.0D);
+        event.put(FRIEND_ENTITY.get(), builder.build());
     }
 }
