@@ -69,8 +69,6 @@ public final class LlmService {
 
         String payload = GSON.toJson(chatRequest);
 
-        LOGGER.info("[MineFriend-LlmService] Sending payload: {}", payload);
-
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(LLM_API_URL))
                 // --- FIX: Added a User-Agent header ---
