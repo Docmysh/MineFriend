@@ -6,7 +6,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
-
 import mf.minefriend.friend.state.FriendPhase;
 
 import java.net.URI;
@@ -26,7 +25,7 @@ public final class LlmService {
 
     private static final HttpClient CLIENT = HttpClient.newHttpClient();
     private static final Gson GSON = new Gson();
-    private static final String LLM_API_URL = "http://26.126.73.192:1234/api/generate";
+    private static final String LLM_API_URL = "http://26.126.73.192:1234/v1/chat/completions";
     private static final List<String> PERSONA_NAMES = List.of(
             "Echo", "Willow", "Nova", "Ash", "Ember", "Rowan"
     );
@@ -36,14 +35,23 @@ public final class LlmService {
     private LlmService() {
     }
 
-    public static CompletableFuture<LlmReply> requestFriendReply(String playerMessage) {
-        return requestFriendReply(playerMessage, FriendPhase.PHASE_ONE);
-    }
-
-    public static CompletableFuture<LlmReply> requestFriendReply(String playerMessage, FriendPhase phase) {
+    // --- REFINEMENT: Added playerName parameter to pass to the prompt ---
+    public static CompletableFuture<LlmReply> requestFriendReply(String playerMessage, String playerName, FriendPhase phase) {
         String personaName = pickPersonaName();
-        String prompt = buildPrompt(personaName, playerMessage, phase);
-        String payload = GSON.toJson(new Request("qwen3", prompt, false));
+        String systemPrompt = buildSystemPrompt(personaName, playerName, phase);
+        String sanitizedMessage = playerMessage.replace("\r", " ").replace("\n", " ").trim();
+
+        // NOTE: Make sure "qwen3" matches the model file you have loaded in your LLM server!
+        ChatRequest chatRequest = new ChatRequest(
+                "qwen3",
+                List.of(
+                        new Message("system", systemPrompt),
+                        new Message("user", sanitizedMessage)
+                ),
+                false
+        );
+
+        String payload = GSON.toJson(chatRequest);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(LLM_API_URL))
@@ -57,21 +65,23 @@ public final class LlmService {
                 .thenApply(response -> interpretResponse(personaName, response, phase));
     }
 
-    private static String buildPrompt(String personaName, String playerMessage, FriendPhase phase) {
+    // --- REFINEMENT: Added playerName parameter to the prompt ---
+    private static String buildSystemPrompt(String personaName, String playerName, FriendPhase phase) {
         String sanitizedName = personaName.replace('"', '\u201c');
-        String sanitizedMessage = playerMessage.replace("\r", " ").replace("\n", " ");
         PhasePrompt prompt = PHASE_PROMPTS.getOrDefault(phase, PHASE_PROMPTS.get(FriendPhase.PHASE_ONE));
         String phaseOneSummary = PHASE_PROMPTS.get(FriendPhase.PHASE_ONE).summary();
         String phaseTwoSummary = PHASE_PROMPTS.get(FriendPhase.PHASE_TWO).summary();
-        return ("You are roleplaying as " + sanitizedName + ", an uncanny Minecraft companion bound to a four-phase narrative. "
-                + "Only phases 1 and 2 are currently unlocked.\n"
+
+        return ("You are roleplaying as " + sanitizedName + ", an uncanny Minecraft companion. Your goal is to befriend a player named '" + playerName + "'.\n"
+                + "You are bound to a four-phase narrative. Only phases 1 and 2 are currently unlocked.\n"
                 + "Phase 1 - The Observer: " + phaseOneSummary + "\n"
                 + "Phase 2 - The Stalker: " + phaseTwoSummary + "\n"
-                + "You are currently in " + prompt.label() + ". " + prompt.behavior() + "\n"
+                // Added player name here for context
+                + "You are currently in " + prompt.label() + " with " + playerName + ". " + prompt.behavior() + "\n"
                 + prompt.transitionRule() + "\n"
+                + "The player's message will follow. Reply in one or two short sentences. "
                 + "Always finish your reply with the directive [[PHASE:x]] indicating the phase you will be in after responding (1 or 2). "
-                + "Do not mention the directive in dialogue and keep the tone diegetic to in-game chat.\n"
-                + "The player just said: \"" + sanitizedMessage + "\". Reply in one or two short sentences.");
+                + "Do not mention the directive in dialogue and keep the tone diegetic to in-game chat.");
     }
 
     private static Map<FriendPhase, PhasePrompt> buildPhasePrompts() {
@@ -128,120 +138,29 @@ public final class LlmService {
     private static String parseResponse(String jsonBody) {
         try {
             JsonElement parsed = JsonParser.parseString(jsonBody);
-            if (parsed == null || parsed.isJsonNull()) {
-                return "";
-            }
+            if (parsed == null || parsed.isJsonNull()) return "";
+
             if (parsed.isJsonObject()) {
                 JsonObject object = parsed.getAsJsonObject();
-
-                if (object.has("error")) {
-                    return sanitize(object.get("error"));
-                }
-
-                if (object.has("response")) {
-                    return sanitize(object.get("response"));
-                }
-
-                if (object.has("content")) {
-                    return sanitize(object.get("content"));
-                }
-
-                if (object.has("message")) {
-                    JsonElement messageElement = object.get("message");
-                    if (messageElement.isJsonObject()) {
-                        JsonObject messageObject = messageElement.getAsJsonObject();
-                        if (messageObject.has("content")) {
-                            return sanitize(messageObject.get("content"));
-                        }
-                        if (messageObject.has("text")) {
-                            return sanitize(messageObject.get("text"));
-                        }
-                    } else {
-                        return sanitize(messageElement);
-                    }
-                }
+                if (object.has("error")) return sanitize(object.get("error"));
 
                 if (object.has("choices")) {
-                    JsonElement choicesElement = object.get("choices");
-                    if (choicesElement.isJsonArray()) {
-                        JsonArray choices = choicesElement.getAsJsonArray();
-                        if (!choices.isEmpty()) {
-                            JsonObject firstChoice = choices.get(0).getAsJsonObject();
-                            if (firstChoice.has("message")) {
-                                JsonObject message = firstChoice.getAsJsonObject("message");
-                                if (message.has("content")) {
-                                    return sanitize(message.get("content"));
-                                }
-                                if (message.has("text")) {
-                                    return sanitize(message.get("text"));
-                                }
-                            }
-                            if (firstChoice.has("content")) {
-                                return sanitize(firstChoice.get("content"));
-                            }
-                            if (firstChoice.has("text")) {
-                                return sanitize(firstChoice.get("text"));
+                    JsonArray choices = object.getAsJsonArray("choices");
+                    if (!choices.isEmpty()) {
+                        JsonObject firstChoice = choices.get(0).getAsJsonObject();
+                        if (firstChoice.has("message")) {
+                            JsonObject message = firstChoice.getAsJsonObject("message");
+                            if (message.has("content")) {
+                                return sanitize(message.get("content"));
                             }
                         }
                     }
                 }
 
-                if (object.has("result")) {
-                    return sanitize(object.get("result"));
-                }
-
-                if (object.has("results")) {
-                    JsonElement resultsElement = object.get("results");
-                    if (resultsElement.isJsonArray()) {
-                        JsonArray results = resultsElement.getAsJsonArray();
-                        if (!results.isEmpty()) {
-                            JsonElement first = results.get(0);
-                            if (first.isJsonPrimitive()) {
-                                return sanitize(first);
-                            }
-                            if (first.isJsonObject()) {
-                                JsonObject firstObject = first.getAsJsonObject();
-                                if (firstObject.has("text")) {
-                                    return sanitize(firstObject.get("text"));
-                                }
-                                if (firstObject.has("content")) {
-                                    return sanitize(firstObject.get("content"));
-                                }
-                                if (firstObject.has("response")) {
-                                    return sanitize(firstObject.get("response"));
-                                }
-                                if (firstObject.has("history")) {
-                                    JsonElement history = firstObject.get("history");
-                                    if (history.isJsonObject()) {
-                                        JsonObject historyObject = history.getAsJsonObject();
-                                        if (historyObject.has("visible")) {
-                                            JsonElement visible = historyObject.get("visible");
-                                            if (visible.isJsonArray()) {
-                                                JsonArray visibleArray = visible.getAsJsonArray();
-                                                if (!visibleArray.isEmpty()) {
-                                                    JsonElement last = visibleArray.get(visibleArray.size() - 1);
-                                                    if (last.isJsonPrimitive()) {
-                                                        return sanitize(last);
-                                                    }
-                                                    if (last.isJsonArray()) {
-                                                        JsonArray lastArray = last.getAsJsonArray();
-                                                        if (!lastArray.isEmpty()) {
-                                                            JsonElement assistant = lastArray.get(lastArray.size() - 1);
-                                                            return sanitize(assistant);
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                if (object.has("response")) return sanitize(object.get("response"));
             }
             return sanitize(jsonBody);
-        } catch (JsonSyntaxException ex) {
+        } catch (JsonSyntaxException | IllegalStateException ex) {
             return sanitize(jsonBody);
         }
     }
@@ -268,17 +187,8 @@ public final class LlmService {
         return normalized.replaceAll("\\s+", " ");
     }
 
-    private static class Request {
-        private final String model;
-        private final String prompt;
-        private final boolean stream;
-
-        private Request(String model, String prompt, boolean stream) {
-            this.model = model;
-            this.prompt = prompt;
-            this.stream = stream;
-        }
-    }
+    private record Message(String role, String content) {}
+    private record ChatRequest(String model, List<Message> messages, boolean stream) {}
 
     public record LlmReply(String personaName, String message, FriendPhase suggestedPhase) {
         public String message() {
@@ -298,3 +208,4 @@ public final class LlmService {
         }
     }
 }
+
