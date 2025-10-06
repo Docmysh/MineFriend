@@ -133,9 +133,19 @@ public final class LlmService {
             }
             if (parsed.isJsonObject()) {
                 JsonObject object = parsed.getAsJsonObject();
+
+                if (object.has("error")) {
+                    return sanitize(object.get("error"));
+                }
+
                 if (object.has("response")) {
                     return sanitize(object.get("response"));
                 }
+
+                if (object.has("content")) {
+                    return sanitize(object.get("content"));
+                }
+
                 if (object.has("message")) {
                     JsonElement messageElement = object.get("message");
                     if (messageElement.isJsonObject()) {
@@ -143,10 +153,14 @@ public final class LlmService {
                         if (messageObject.has("content")) {
                             return sanitize(messageObject.get("content"));
                         }
+                        if (messageObject.has("text")) {
+                            return sanitize(messageObject.get("text"));
+                        }
                     } else {
                         return sanitize(messageElement);
                     }
                 }
+
                 if (object.has("choices")) {
                     JsonElement choicesElement = object.get("choices");
                     if (choicesElement.isJsonArray()) {
@@ -158,6 +172,12 @@ public final class LlmService {
                                 if (message.has("content")) {
                                     return sanitize(message.get("content"));
                                 }
+                                if (message.has("text")) {
+                                    return sanitize(message.get("text"));
+                                }
+                            }
+                            if (firstChoice.has("content")) {
+                                return sanitize(firstChoice.get("content"));
                             }
                             if (firstChoice.has("text")) {
                                 return sanitize(firstChoice.get("text"));
@@ -165,10 +185,64 @@ public final class LlmService {
                         }
                     }
                 }
+
+                if (object.has("result")) {
+                    return sanitize(object.get("result"));
+                }
+
+                if (object.has("results")) {
+                    JsonElement resultsElement = object.get("results");
+                    if (resultsElement.isJsonArray()) {
+                        JsonArray results = resultsElement.getAsJsonArray();
+                        if (!results.isEmpty()) {
+                            JsonElement first = results.get(0);
+                            if (first.isJsonPrimitive()) {
+                                return sanitize(first);
+                            }
+                            if (first.isJsonObject()) {
+                                JsonObject firstObject = first.getAsJsonObject();
+                                if (firstObject.has("text")) {
+                                    return sanitize(firstObject.get("text"));
+                                }
+                                if (firstObject.has("content")) {
+                                    return sanitize(firstObject.get("content"));
+                                }
+                                if (firstObject.has("response")) {
+                                    return sanitize(firstObject.get("response"));
+                                }
+                                if (firstObject.has("history")) {
+                                    JsonElement history = firstObject.get("history");
+                                    if (history.isJsonObject()) {
+                                        JsonObject historyObject = history.getAsJsonObject();
+                                        if (historyObject.has("visible")) {
+                                            JsonElement visible = historyObject.get("visible");
+                                            if (visible.isJsonArray()) {
+                                                JsonArray visibleArray = visible.getAsJsonArray();
+                                                if (!visibleArray.isEmpty()) {
+                                                    JsonElement last = visibleArray.get(visibleArray.size() - 1);
+                                                    if (last.isJsonPrimitive()) {
+                                                        return sanitize(last);
+                                                    }
+                                                    if (last.isJsonArray()) {
+                                                        JsonArray lastArray = last.getAsJsonArray();
+                                                        if (!lastArray.isEmpty()) {
+                                                            JsonElement assistant = lastArray.get(lastArray.size() - 1);
+                                                            return sanitize(assistant);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            return jsonBody;
+            return sanitize(jsonBody);
         } catch (JsonSyntaxException ex) {
-            return jsonBody;
+            return sanitize(jsonBody);
         }
     }
 
