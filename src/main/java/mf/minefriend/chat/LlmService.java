@@ -29,15 +29,11 @@ public final class LlmService {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     private static final HttpClient CLIENT = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(30))  // Increased from 15 to 30 seconds
+            .connectTimeout(Duration.ofSeconds(15))
             .build();
 
     private static final Gson GSON = new Gson();
     private static final String LLM_API_URL = "http://26.126.73.192:1234/v1/chat/completions";
-    
-    // --- FIX: Configurable timeout for LLM requests (LLMs can be slow) ---
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(120);  // 2 minutes for LLM processing
-    
     private static final List<String> PERSONA_NAMES = List.of(
             "Echo", "Willow", "Nova", "Ash", "Ember", "Rowan"
     );
@@ -49,7 +45,6 @@ public final class LlmService {
 
     public static CompletableFuture<LlmReply> requestFriendReply(String playerMessage, String playerName, FriendPhase phase) {
         String personaName = pickPersonaName();
-        // --- Reverted to the full, complex system prompt ---
         String systemPrompt = buildSystemPrompt(personaName, playerName, phase);
         String sanitizedMessage = playerMessage.replace("\r", " ").replace("\n", " ").trim();
 
@@ -58,44 +53,47 @@ public final class LlmService {
             return CompletableFuture.completedFuture(new LlmReply(personaName, "", null));
         }
 
+        // --- FIX 1: Using the exact model name you provided ---
+        String modelName = "mistralai/mathstral-7b-v0.1";
+
+        // --- FIX 2: Replicating the full payload from your working curl command ---
         ChatRequest chatRequest = new ChatRequest(
-                null,
+                modelName,
                 List.of(
                         new Message("system", systemPrompt),
                         new Message("user", sanitizedMessage)
                 ),
+                0.7,
+                -1,
                 false
         );
 
         String payload = GSON.toJson(chatRequest);
 
+        LOGGER.info("[MineFriend-LlmService] Sending payload: {}", payload);
+
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(LLM_API_URL))
-                // --- FIX: Added a User-Agent header ---
-                // Some servers hang if this header is missing.
                 .header("User-Agent", "MineFriendMod/1.0")
                 .header("Content-Type", "application/json")
                 .timeout(Duration.ofSeconds(60))
                 .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8))
                 .build();
 
-        // --- FIX: Better error handling with specific timeout detection ---
         return CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .thenApply(HttpResponse::body)
                 .thenApply(LlmService::parseResponse)
                 .thenApply(response -> interpretResponse(personaName, response, phase))
                 .exceptionally(throwable -> {
-                    // --- FIX: Provide helpful feedback for different error types ---
-                    if (throwable.getCause() instanceof HttpTimeoutException) {
-                        LOGGER.error("[MineFriend-LlmService] Request timed out after {} seconds. " +
-                                "The LLM server might be overloaded or the model is too slow. " +
-                                "Consider using a faster model or increasing REQUEST_TIMEOUT in LlmService.java",
-                                REQUEST_TIMEOUT.getSeconds());
+                    String errorMessage;
+                    Throwable cause = throwable.getCause();
+                    if (cause instanceof HttpTimeoutException) {
+                        errorMessage = "Error: Connection to LLM timed out. The server is not responding.";
                     } else {
-                        LOGGER.error("[MineFriend-LlmService] Request failed: {}", throwable.getMessage(), throwable);
+                        errorMessage = "Error: Could not connect to LLM. " + (cause != null ? cause.getMessage() : throwable.getMessage());
                     }
-                    // Return a fallback response so the game doesn't break
-                    return new LlmReply(personaName, "", null);
+                    LOGGER.error("[MineFriend] LLM request failed: {}", errorMessage);
+                    return new LlmReply(personaName, errorMessage, null);
                 });
     }
 
@@ -133,7 +131,6 @@ public final class LlmService {
         return prompts;
     }
 
-    // --- Reverted to the full response interpretation logic ---
     private static LlmReply interpretResponse(String personaName, String response, FriendPhase currentPhase) {
         PhaseExtraction extraction = extractPhaseDirective(response, currentPhase);
         FriendPhase suggested = extraction.explicit() ? extraction.phase() : null;
@@ -221,8 +218,9 @@ public final class LlmService {
         return normalized.replaceAll("\\s+", " ");
     }
 
+    // --- FIX 3: Updated the request object to match the curl command ---
     private record Message(String role, String content) {}
-    private record ChatRequest(String model, List<Message> messages, boolean stream) {}
+    private record ChatRequest(String model, List<Message> messages, double temperature, int max_tokens, boolean stream) {}
 
     public record LlmReply(String personaName, String message, FriendPhase suggestedPhase) {
         public String message() {
