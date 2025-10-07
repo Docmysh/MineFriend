@@ -35,7 +35,6 @@ public final class LlmService {
 
     private static final Gson GSON = new Gson();
     private static final String LLM_API_URL = "http://26.126.73.192:1234/v1/chat/completions";
-    // This list can now be moved to where you create your FriendData
     public static final List<String> PERSONA_NAMES = List.of(
             "Echo", "Willow", "Nova", "Ash", "Ember", "Rowan"
     );
@@ -45,8 +44,6 @@ public final class LlmService {
     private LlmService() {
     }
 
-    // --- FIX 1: Changed method to accept the personaName ---
-    // The name is now passed in from the event handler to ensure it's consistent.
     public static CompletableFuture<LlmReply> requestFriendReply(String playerMessage, String playerName, String personaName, FriendPhase phase) {
         String systemPrompt = buildSystemPrompt(personaName, playerName, phase);
         String sanitizedMessage = playerMessage.replace("\r", " ").replace("\n", " ").trim();
@@ -98,17 +95,18 @@ public final class LlmService {
                 });
     }
 
-    // --- FIX 2: Made the system prompt much stricter ---
+    // --- FIX: Made the system prompt even stricter to ensure direct replies ---
     private static String buildSystemPrompt(String personaName, String playerName, FriendPhase phase) {
         String sanitizedName = personaName.replace('"', '\u201c');
         PhasePrompt prompt = PHASE_PROMPTS.getOrDefault(phase, PHASE_PROMPTS.get(FriendPhase.PHASE_ONE));
 
         return ("You are roleplaying a Minecraft character. The player's name is '" + playerName + "'.\n"
-                + "STRICT RULES:\n"
-                + "1. Your name is ALWAYS " + sanitizedName + ". Do not use any other name or introduce yourself.\n"
-                + "2. Your entire response MUST be ONE single, short sentence. Be very concise.\n"
-                + "3. NEVER mention that you are an AI, a character, or in a mod.\n"
-                + "4. Always finish your reply with the phase directive [[PHASE:x]].\n\n"
+                + "VERY STRICT RULES:\n"
+                + "1. Your response MUST be a direct and relevant reply to what the player just said. Do not give generic, unrelated statements.\n"
+                + "2. Your name is ALWAYS " + sanitizedName + ". Never use another name or introduce yourself.\n"
+                + "3. Your entire response MUST be ONE single, short sentence. Be very concise.\n"
+                + "4. NEVER mention that you are an AI, a character, or in a mod.\n"
+                + "5. Always finish your reply with the phase directive [[PHASE:x]].\n\n"
                 + "CURRENT SITUATION:\n"
                 + "You are in " + prompt.label() + ". Your instructions are: " + prompt.behavior() + "\n"
                 + "Your phase transition rule is: " + prompt.transitionRule());
