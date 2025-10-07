@@ -31,42 +31,35 @@ public final class ChatEventHandler {
 
         LOGGER.info("[MineFriend] Captured message: '{}' from player: '{}'", playerMessage, playerName);
 
-        // --- FIX: Use ifPresent to get all data at once and avoid Optional nesting ---
-        FriendData.get(player).ifPresent(data -> {
-            FriendPhase phase = data.phase();
-            // Get the persistent name from the friend's data
-            String personaName = data.personaName();
+        FriendPhase phase = FriendData.get(player).map(FriendData::phase).orElse(FriendPhase.PHASE_ONE);
 
-            LOGGER.info("[MineFriend] Current friend phase is: {}, persona name is: {}", phase, personaName);
-            LOGGER.info("[MineFriend] Sending request to LlmService...");
+        LOGGER.info("[MineFriend] Current friend phase is: {}", phase);
+        LOGGER.info("[MineFriend] Sending request to LlmService...");
 
-            // Pass the consistent personaName to the service
-            LlmService.requestFriendReply(playerMessage, playerName, personaName, phase)
-                    .thenAccept(reply -> {
-                        LOGGER.info("[MineFriend] Successfully received LLM reply. Broadcasting...");
-                        broadcastReply(player, reply);
-                    })
-                    .exceptionally(throwable -> {
-                        LOGGER.error("==========================================================");
-                        LOGGER.error("[MineFriend] CRITICAL: FAILED TO GET LLM RESPONSE!");
-                        LOGGER.error("Check your network, RadminVPN IP, port, and LLM server status.");
-                        LOGGER.error("Error details: ", throwable);
-                        LOGGER.error("==========================================================");
-                        return null;
-                    });
-        });
+        // --- FIX: Reverted to the older method signature that doesn't require personaName ---
+        LlmService.requestFriendReply(playerMessage, playerName, phase)
+                .thenAccept(reply -> {
+                    LOGGER.info("[MineFriend] Successfully received LLM reply. Broadcasting...");
+                    broadcastReply(player, reply);
+                })
+                .exceptionally(throwable -> {
+                    LOGGER.error("==========================================================");
+                    LOGGER.error("[MineFriend] CRITICAL: FAILED TO GET LLM RESPONSE!");
+                    LOGGER.error("Check your network, RadminVPN IP, port, and LLM server status.");
+                    LOGGER.error("Error details: ", throwable);
+                    LOGGER.error("==========================================================");
+                    return null;
+                });
     }
 
-    // This method is now compatible with the updated LlmService
-    public static void requestInitialGreeting(ServerPlayer player, FriendData data) {
+    // --- FIX: Changed the signature to accept FriendPhase to fix the FriendManager compilation error ---
+    public static void requestInitialGreeting(ServerPlayer player, FriendPhase phase) {
         String playerName = player.getGameProfile().getName();
-        String personaName = data.personaName(); // Get the name from the data
-        FriendPhase phase = data.phase();
-
         String kickoffPrompt = "A friend entity has just appeared. Say hi to the player and introduce yourself.";
-        LOGGER.info("[MineFriend] Triggering initial greeting for player '{}' with name '{}'.", playerName, personaName);
+        LOGGER.info("[MineFriend] Triggering initial greeting for player '{}'.", playerName);
 
-        LlmService.requestFriendReply(kickoffPrompt, playerName, personaName, phase)
+        // This call now matches the reverted LlmService
+        LlmService.requestFriendReply(kickoffPrompt, playerName, phase)
                 .thenAccept(reply -> {
                     LOGGER.info("[MineFriend] Initial greeting received. Broadcasting to players.");
                     broadcastReply(player, reply);
