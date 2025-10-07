@@ -31,35 +31,44 @@ public final class ChatEventHandler {
 
         LOGGER.info("[MineFriend] Captured message: '{}' from player: '{}'", playerMessage, playerName);
 
-        FriendPhase phase = FriendData.get(player).map(FriendData::phase).orElse(FriendPhase.PHASE_ONE);
+        // --- FIX: Use ifPresent to get all data at once, including the persistent name ---
+        FriendData.get(player).ifPresent(data -> {
+            FriendPhase phase = data.phase();
+            // This now requires your FriendData class to have a personaName() method
+            String personaName = data.personaName();
 
-        LOGGER.info("[MineFriend] Current friend phase is: {}", phase);
-        LOGGER.info("[MineFriend] Sending request to LlmService...");
+            LOGGER.info("[MineFriend] Current friend phase is: {}, persona name is: {}", phase, personaName);
+            LOGGER.info("[MineFriend] Sending request to LlmService...");
 
-        // --- FIX: Reverted to the older method signature that doesn't require personaName ---
-        LlmService.requestFriendReply(playerMessage, playerName, phase)
-                .thenAccept(reply -> {
-                    LOGGER.info("[MineFriend] Successfully received LLM reply. Broadcasting...");
-                    broadcastReply(player, reply);
-                })
-                .exceptionally(throwable -> {
-                    LOGGER.error("==========================================================");
-                    LOGGER.error("[MineFriend] CRITICAL: FAILED TO GET LLM RESPONSE!");
-                    LOGGER.error("Check your network, RadminVPN IP, port, and LLM server status.");
-                    LOGGER.error("Error details: ", throwable);
-                    LOGGER.error("==========================================================");
-                    return null;
-                });
+            // Pass the consistent personaName to the service to fix the compilation error
+            LlmService.requestFriendReply(playerMessage, playerName, personaName, phase)
+                    .thenAccept(reply -> {
+                        LOGGER.info("[MineFriend] Successfully received LLM reply. Broadcasting...");
+                        broadcastReply(player, reply);
+                    })
+                    .exceptionally(throwable -> {
+                        LOGGER.error("==========================================================");
+                        LOGGER.error("[MineFriend] CRITICAL: FAILED TO GET LLM RESPONSE!");
+                        LOGGER.error("Check your network, RadminVPN IP, port, and LLM server status.");
+                        LOGGER.error("Error details: ", throwable);
+                        LOGGER.error("==========================================================");
+                        return null;
+                    });
+        });
     }
 
-    // --- FIX: Changed the signature to accept FriendPhase to fix the FriendManager compilation error ---
-    public static void requestInitialGreeting(ServerPlayer player, FriendPhase phase) {
+    // --- FIX: Changed the signature to accept the full FriendData object ---
+    public static void requestInitialGreeting(ServerPlayer player, FriendData data) {
         String playerName = player.getGameProfile().getName();
-        String kickoffPrompt = "A friend entity has just appeared. Say hi to the player and introduce yourself.";
-        LOGGER.info("[MineFriend] Triggering initial greeting for player '{}'.", playerName);
+        // Get the name and phase from the data object
+        String personaName = data.personaName();
+        FriendPhase phase = data.phase();
 
-        // This call now matches the reverted LlmService
-        LlmService.requestFriendReply(kickoffPrompt, playerName, phase)
+        String kickoffPrompt = "A friend entity has just appeared. Say hi to the player and introduce yourself.";
+        LOGGER.info("[MineFriend] Triggering initial greeting for player '{}' with name '{}'.", playerName, personaName);
+
+        // This call now has the correct arguments
+        LlmService.requestFriendReply(kickoffPrompt, playerName, personaName, phase)
                 .thenAccept(reply -> {
                     LOGGER.info("[MineFriend] Initial greeting received. Broadcasting to players.");
                     broadcastReply(player, reply);
