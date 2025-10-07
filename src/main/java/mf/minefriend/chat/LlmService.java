@@ -28,7 +28,9 @@ import java.util.regex.Pattern;
 public final class LlmService {
     private static final Logger LOGGER = LogUtils.getLogger();
 
+    // --- FIX: Forcing the client to use the more compatible HTTP/1.1 protocol ---
     private static final HttpClient CLIENT = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(Duration.ofSeconds(15))
             .build();
 
@@ -53,10 +55,8 @@ public final class LlmService {
             return CompletableFuture.completedFuture(new LlmReply(personaName, "", null));
         }
 
-        // --- FIX 1: Using the exact model name you provided ---
         String modelName = "mistralai/mathstral-7b-v0.1";
 
-        // --- FIX 2: Replicating the full payload from your working curl command ---
         ChatRequest chatRequest = new ChatRequest(
                 modelName,
                 List.of(
@@ -218,7 +218,6 @@ public final class LlmService {
         return normalized.replaceAll("\\s+", " ");
     }
 
-    // --- FIX 3: Updated the request object to match the curl command ---
     private record Message(String role, String content) {}
     private record ChatRequest(String model, List<Message> messages, double temperature, int max_tokens, boolean stream) {}
 
