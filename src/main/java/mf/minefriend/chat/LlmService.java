@@ -28,7 +28,6 @@ import java.util.regex.Pattern;
 public final class LlmService {
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    // --- FIX: Forcing the client to use the more compatible HTTP/1.1 protocol ---
     private static final HttpClient CLIENT = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(Duration.ofSeconds(15))
@@ -36,7 +35,8 @@ public final class LlmService {
 
     private static final Gson GSON = new Gson();
     private static final String LLM_API_URL = "http://26.126.73.192:1234/v1/chat/completions";
-    private static final List<String> PERSONA_NAMES = List.of(
+    // This list can now be moved to where you create your FriendData
+    public static final List<String> PERSONA_NAMES = List.of(
             "Echo", "Willow", "Nova", "Ash", "Ember", "Rowan"
     );
     private static final Map<FriendPhase, PhasePrompt> PHASE_PROMPTS = buildPhasePrompts();
@@ -45,8 +45,9 @@ public final class LlmService {
     private LlmService() {
     }
 
-    public static CompletableFuture<LlmReply> requestFriendReply(String playerMessage, String playerName, FriendPhase phase) {
-        String personaName = pickPersonaName();
+    // --- FIX 1: Changed method to accept the personaName ---
+    // The name is now passed in from the event handler to ensure it's consistent.
+    public static CompletableFuture<LlmReply> requestFriendReply(String playerMessage, String playerName, String personaName, FriendPhase phase) {
         String systemPrompt = buildSystemPrompt(personaName, playerName, phase);
         String sanitizedMessage = playerMessage.replace("\r", " ").replace("\n", " ").trim();
 
@@ -97,21 +98,20 @@ public final class LlmService {
                 });
     }
 
+    // --- FIX 2: Made the system prompt much stricter ---
     private static String buildSystemPrompt(String personaName, String playerName, FriendPhase phase) {
         String sanitizedName = personaName.replace('"', '\u201c');
         PhasePrompt prompt = PHASE_PROMPTS.getOrDefault(phase, PHASE_PROMPTS.get(FriendPhase.PHASE_ONE));
-        String phaseOneSummary = PHASE_PROMPTS.get(FriendPhase.PHASE_ONE).summary();
-        String phaseTwoSummary = PHASE_PROMPTS.get(FriendPhase.PHASE_TWO).summary();
 
-        return ("You are roleplaying as " + sanitizedName + ", an uncanny Minecraft companion. Your goal is to befriend a player named '" + playerName + "'.\n"
-                + "You are bound to a four-phase narrative. Only phases 1 and 2 are currently unlocked.\n"
-                + "Phase 1 - The Observer: " + phaseOneSummary + "\n"
-                + "Phase 2 - The Stalker: " + phaseTwoSummary + "\n"
-                + "You are currently in " + prompt.label() + " with " + playerName + ". " + prompt.behavior() + "\n"
-                + prompt.transitionRule() + "\n"
-                + "The player's message will follow. Reply in one or two short sentences. "
-                + "Always finish your reply with the directive [[PHASE:x]] indicating the phase you will be in after responding (1 or 2). "
-                + "Do not mention the directive in dialogue and keep the tone diegetic to in-game chat.");
+        return ("You are roleplaying a Minecraft character. The player's name is '" + playerName + "'.\n"
+                + "STRICT RULES:\n"
+                + "1. Your name is ALWAYS " + sanitizedName + ". Do not use any other name or introduce yourself.\n"
+                + "2. Your entire response MUST be ONE single, short sentence. Be very concise.\n"
+                + "3. NEVER mention that you are an AI, a character, or in a mod.\n"
+                + "4. Always finish your reply with the phase directive [[PHASE:x]].\n\n"
+                + "CURRENT SITUATION:\n"
+                + "You are in " + prompt.label() + ". Your instructions are: " + prompt.behavior() + "\n"
+                + "Your phase transition rule is: " + prompt.transitionRule());
     }
 
     private static Map<FriendPhase, PhasePrompt> buildPhasePrompts() {
@@ -158,11 +158,6 @@ public final class LlmService {
         String cleaned = explicit ? matcher.replaceAll("") : response;
         cleaned = sanitize(cleaned);
         return new PhaseExtraction(cleaned, phase, explicit);
-    }
-
-    private static String pickPersonaName() {
-        int index = ThreadLocalRandom.current().nextInt(PERSONA_NAMES.size());
-        return PERSONA_NAMES.get(index);
     }
 
     private static String parseResponse(String jsonBody) {

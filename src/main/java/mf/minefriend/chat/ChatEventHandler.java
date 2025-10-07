@@ -23,45 +23,50 @@ public final class ChatEventHandler {
 
     @SubscribeEvent
     public static void onPlayerChat(ServerChatEvent event) {
-        // --- DEBUG LOG 1: Confirm the event is firing ---
         LOGGER.info("[MineFriend] onPlayerChat event fired.");
 
         ServerPlayer player = event.getPlayer();
         String playerMessage = event.getMessage().getString();
         String playerName = player.getGameProfile().getName();
 
-        // --- DEBUG LOG 2: Confirm we have the correct data ---
         LOGGER.info("[MineFriend] Captured message: '{}' from player: '{}'", playerMessage, playerName);
 
-        FriendPhase phase = FriendData.get(player).map(FriendData::phase).orElse(FriendPhase.PHASE_ONE);
+        // --- FIX: Use ifPresent to get all data at once and avoid Optional nesting ---
+        FriendData.get(player).ifPresent(data -> {
+            FriendPhase phase = data.phase();
+            // Get the persistent name from the friend's data
+            String personaName = data.personaName();
 
-        // --- DEBUG LOG 3: Confirm the current phase ---
-        LOGGER.info("[MineFriend] Current friend phase is: {}", phase);
+            LOGGER.info("[MineFriend] Current friend phase is: {}, persona name is: {}", phase, personaName);
+            LOGGER.info("[MineFriend] Sending request to LlmService...");
 
-        // --- DEBUG LOG 4: Confirm we are about to make the request ---
-        LOGGER.info("[MineFriend] Sending request to LlmService...");
-        LlmService.requestFriendReply(playerMessage, playerName, phase)
-                .thenAccept(reply -> {
-                    // --- DEBUG LOG 5: Confirm a successful reply ---
-                    LOGGER.info("[MineFriend] Successfully received LLM reply. Broadcasting...");
-                    broadcastReply(player, reply);
-                })
-                .exceptionally(throwable -> {
-                    // --- DEBUG LOG 6: Make errors very clear ---
-                    LOGGER.error("==========================================================");
-                    LOGGER.error("[MineFriend] CRITICAL: FAILED TO GET LLM RESPONSE!");
-                    LOGGER.error("Check your network, RadminVPN IP, port, and LLM server status.");
-                    LOGGER.error("Error details: ", throwable);
-                    LOGGER.error("==========================================================");
-                    return null;
-                });
+            // Pass the consistent personaName to the service
+            LlmService.requestFriendReply(playerMessage, playerName, personaName, phase)
+                    .thenAccept(reply -> {
+                        LOGGER.info("[MineFriend] Successfully received LLM reply. Broadcasting...");
+                        broadcastReply(player, reply);
+                    })
+                    .exceptionally(throwable -> {
+                        LOGGER.error("==========================================================");
+                        LOGGER.error("[MineFriend] CRITICAL: FAILED TO GET LLM RESPONSE!");
+                        LOGGER.error("Check your network, RadminVPN IP, port, and LLM server status.");
+                        LOGGER.error("Error details: ", throwable);
+                        LOGGER.error("==========================================================");
+                        return null;
+                    });
+        });
     }
 
-    public static void requestInitialGreeting(ServerPlayer player, FriendPhase phase) {
+    // This method is now compatible with the updated LlmService
+    public static void requestInitialGreeting(ServerPlayer player, FriendData data) {
         String playerName = player.getGameProfile().getName();
+        String personaName = data.personaName(); // Get the name from the data
+        FriendPhase phase = data.phase();
+
         String kickoffPrompt = "A friend entity has just appeared. Say hi to the player and introduce yourself.";
-        LOGGER.info("[MineFriend] Triggering initial greeting for player '{}'.", playerName);
-        LlmService.requestFriendReply(kickoffPrompt, playerName, phase)
+        LOGGER.info("[MineFriend] Triggering initial greeting for player '{}' with name '{}'.", playerName, personaName);
+
+        LlmService.requestFriendReply(kickoffPrompt, playerName, personaName, phase)
                 .thenAccept(reply -> {
                     LOGGER.info("[MineFriend] Initial greeting received. Broadcasting to players.");
                     broadcastReply(player, reply);
