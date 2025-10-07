@@ -128,7 +128,7 @@ public class FriendManager {
                 FriendDialogueSession session = ACTIVE_DIALOGUE.computeIfAbsent(player.getUUID(), uuid -> new FriendDialogueSession(player, friendEntity, updated));
                 session.updateEntity(friendEntity);
                 session.updateData(updated);
-                ChatEventHandler.requestInitialGreeting(player, updated.phase());
+                ChatEventHandler.requestInitialGreeting(player, updated);
             });
         });
     }
