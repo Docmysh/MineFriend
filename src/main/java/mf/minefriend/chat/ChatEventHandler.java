@@ -34,8 +34,7 @@ public final class ChatEventHandler {
         // --- FIX: Use ifPresent to get all data at once, including the persistent name ---
         FriendData.get(player).ifPresent(data -> {
             FriendPhase phase = data.phase();
-            // This now requires your FriendData class to have a personaName() method
-            String personaName = data.personaName();
+            String personaName = resolvePersonaName(data);
 
             LOGGER.info("[MineFriend] Current friend phase is: {}, persona name is: {}", phase, personaName);
             LOGGER.info("[MineFriend] Sending request to LlmService...");
@@ -61,7 +60,7 @@ public final class ChatEventHandler {
     public static void requestInitialGreeting(ServerPlayer player, FriendData data) {
         String playerName = player.getGameProfile().getName();
         // Get the name and phase from the data object
-        String personaName = data.personaName();
+        String personaName = resolvePersonaName(data);
         FriendPhase phase = data.phase();
 
         String kickoffPrompt = "A friend entity has just appeared. Say hi to the player and introduce yourself.";
@@ -77,6 +76,11 @@ public final class ChatEventHandler {
                     LOGGER.error("[MineFriend] Failed to retrieve initial greeting for player '{}'.", playerName, throwable);
                     return null;
                 });
+    }
+
+    private static String resolvePersonaName(FriendData data) {
+        String name = data.friendName();
+        return (name == null || name.isBlank()) ? "Friend" : name;
     }
 
     private static void broadcastReply(ServerPlayer player, LlmReply reply) {
